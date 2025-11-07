@@ -8,7 +8,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 import os
 
-from archivage_jira.archiver import JiraArchiver
+from .archiver import JiraArchiver
 
 
 def main():

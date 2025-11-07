@@ -26,8 +26,14 @@ source venv/bin/activate  # Sur Linux/Mac
 .\venv\Scripts\activate  # Sur Windows
 ```
 
-### 3. Installer les dépendances
+### 3. Installer le package
 
+Option A - Installation en mode développement (recommandé):
+```bash
+pip install -e .
+```
+
+Option B - Installation des dépendances uniquement:
 ```bash
 pip install -r requirements.txt
 ```
@@ -85,10 +91,20 @@ Avant d'archiver, vous pouvez vérifier les informations des projets:
 python -m src.archivage_jira.main projects.json --info
 ```
 
+Si vous avez installé avec `pip install -e .`, vous pouvez aussi utiliser:
+```bash
+python -m archivage_jira.main projects.json --info
+```
+
 ### 3. Archiver les projets
 
 ```bash
 python -m src.archivage_jira.main projects.json
+```
+
+Ou avec l'installation en mode développement:
+```bash
+python -m archivage_jira.main projects.json
 ```
 
 ### Options de ligne de commande
@@ -154,6 +170,13 @@ python -m src.archivage_jira.main projects.json \
 ```
 
 ## Résolution de problèmes
+
+### Erreur ModuleNotFoundError
+
+Si vous obtenez `ModuleNotFoundError: No module named 'archivage_jira'`:
+- Assurez-vous d'être dans le répertoire racine du projet
+- Utilisez `python -m src.archivage_jira.main` au lieu de `python -m archivage_jira.main`
+- Ou installez le package en mode développement: `pip install -e .`
 
 ### Erreur de permissions
 
