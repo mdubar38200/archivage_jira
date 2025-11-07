@@ -248,9 +248,9 @@ class JiraArchiver:
                 # JQL pour récupérer toutes les issues du projet
                 jql = f"project = {project_key} ORDER BY created DESC"
 
-                # Utiliser l'API REST directement pour supporter les projets archivés
-                # La bibliothèque jira-python ne supporte pas includeArchived par défaut
-                search_url = f"{self.jira_url}/rest/api/3/search"
+                # Utiliser la nouvelle API REST v3 search/jql pour supporter les projets archivés
+                # L'ancienne API /rest/api/3/search a été dépréciée
+                search_url = f"{self.jira_url}/rest/api/3/search/jql"
                 params = {
                     "jql": jql,
                     "startAt": start_at,
@@ -266,6 +266,12 @@ class JiraArchiver:
                         f"Erreur lors de la récupération des issues de {project_key}: "
                         f"Status {response.status_code}"
                     )
+                    # Log de la réponse pour debug
+                    try:
+                        error_data = response.json()
+                        logger.error(f"Détails de l'erreur: {error_data}")
+                    except:
+                        logger.error(f"Réponse: {response.text}")
                     break
 
                 data = response.json()

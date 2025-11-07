@@ -282,7 +282,8 @@ Si la connexion échoue:
 L'outil utilise le paramètre `includeArchived=true` de l'API REST Jira (v3) pour récupérer les issues des projets archivés. Cela signifie que:
 - ✅ Les issues des projets archivés sont automatiquement incluses dans l'export
 - ✅ Aucune configuration spéciale n'est nécessaire
-- ℹ️ L'API REST v3 est utilisée directement pour garantir la compatibilité
+- ℹ️ L'API REST v3 `/rest/api/3/search/jql` est utilisée (nouvelle API migration depuis `/rest/api/3/search`)
+- ℹ️ Compatible avec les dernières versions de l'API Jira Cloud
 
 ## Développement
 
