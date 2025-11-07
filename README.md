@@ -201,7 +201,7 @@ python -m src.archivage_jira.main projects.json --export-archived archived_proje
 
 Lors de l'utilisation de `--export-archived`, le fichier JSON généré a la structure suivante:
 
-**Note importante**: L'export récupère automatiquement **toutes les issues** des projets archivés grâce au paramètre `includeArchived=true` de l'API Jira. Les projets archivés et leurs issues sont donc pleinement accessibles.
+**Note importante**: L'export récupère automatiquement **toutes les issues** des projets archivés via l'API officielle `/rest/api/3/issues/archive/export` (Atlassian). L'outil détecte automatiquement si un projet est archivé et utilise l'API appropriée (export CSV pour archivés, search standard pour actifs). Les projets archivés et leurs issues sont donc pleinement accessibles.
 
 ```json
 {
@@ -279,10 +279,12 @@ Si la connexion échoue:
 
 ### Issues des projets archivés
 
-L'outil utilise le paramètre `includeArchived=true` de l'API REST Jira (v3) pour récupérer les issues des projets archivés. Cela signifie que:
-- ✅ Les issues des projets archivés sont automatiquement incluses dans l'export
-- ✅ Aucune configuration spéciale n'est nécessaire
-- ℹ️ L'API REST v3 `/rest/api/3/search/jql` est utilisée (nouvelle API migration depuis `/rest/api/3/search`)
+L'outil utilise l'API officielle Atlassian pour exporter les issues des projets archivés:
+- ✅ **API `/rest/api/3/issues/archive/export`** : Endpoint officiel pour les projets archivés (méthode PUT, retourne CSV)
+- ✅ **API search standard** : Pour les projets non archivés
+- ✅ Détection automatique du statut archivé du projet
+- ✅ Parsing automatique du CSV en JSON pour un export uniforme
+- ℹ️ Référence: [Documentation Atlassian](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issues-archive-export-put)
 - ℹ️ Compatible avec les dernières versions de l'API Jira Cloud
 
 ## Développement

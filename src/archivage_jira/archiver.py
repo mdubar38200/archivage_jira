@@ -4,6 +4,8 @@ Module principal pour l'archivage de projets Jira.
 
 import json
 import logging
+import csv
+import io
 from pathlib import Path
 from typing import List
 from datetime import datetime
@@ -231,67 +233,85 @@ class JiraArchiver:
         """
         Récupère toutes les issues d'un projet, y compris pour les projets archivés.
 
+        Utilise l'API /rest/api/3/issues/archive/export pour les projets archivés
+        qui est la méthode officielle recommandée par Atlassian.
+
         Args:
             project_key: Clé du projet
-            max_results: Nombre maximum d'issues à récupérer (par batch)
+            max_results: Nombre maximum d'issues à récupérer (non utilisé pour l'export CSV)
 
         Returns:
             Liste des issues avec leurs informations
         """
         try:
-            issues_list = []
-            start_at = 0
-
             logger.info(f"Récupération des issues du projet {project_key}...")
 
-            while True:
-                # JQL pour récupérer toutes les issues du projet
-                jql = f"project = {project_key} ORDER BY created DESC"
+            # Vérifier si le projet est archivé
+            is_archived = self.is_project_archived(project_key)
 
-                # Utiliser la nouvelle API REST v3 search/jql pour supporter les projets archivés
-                # L'ancienne API /rest/api/3/search a été dépréciée
-                search_url = f"{self.jira_url}/rest/api/3/search/jql"
-                params = {
-                    "jql": jql,
-                    "startAt": start_at,
-                    "maxResults": max_results,
-                    "fields": "summary,status",
-                    "includeArchived": "true"  # Paramètre clé pour les projets archivés
-                }
+            if is_archived:
+                # Utiliser l'API archive/export pour les projets archivés
+                # Documentation: https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issues-archive-export-put
+                logger.info(f"Utilisation de l'API archive/export pour le projet archivé {project_key}")
 
-                response = self.jira._session.get(search_url, params=params)
+                export_url = f"{self.jira_url}/rest/api/3/issues/archive/export"
+                jql = f"project = {project_key}"
+
+                # L'API attend un PUT avec le JQL en body
+                payload = {"jql": jql}
+                headers = {"Content-Type": "application/json"}
+
+                response = self.jira._session.put(
+                    export_url,
+                    json=payload,
+                    headers=headers
+                )
 
                 if response.status_code != 200:
                     logger.error(
-                        f"Erreur lors de la récupération des issues de {project_key}: "
+                        f"Erreur lors de l'export des issues archivées de {project_key}: "
                         f"Status {response.status_code}"
                     )
-                    # Log de la réponse pour debug
                     try:
                         error_data = response.json()
                         logger.error(f"Détails de l'erreur: {error_data}")
                     except:
-                        logger.error(f"Réponse: {response.text}")
-                    break
+                        logger.error(f"Réponse: {response.text[:500]}")
+                    return []
 
-                data = response.json()
-                issues = data.get("issues", [])
+                # Parser le CSV retourné
+                csv_content = response.text
+                issues_list = self._parse_archived_issues_csv(csv_content)
 
-                if not issues:
-                    break
+            else:
+                # Pour les projets non archivés, utiliser l'API search standard
+                issues_list = []
+                start_at = 0
 
-                for issue in issues:
-                    issues_list.append({
-                        "key": issue.get("key"),
-                        "summary": issue.get("fields", {}).get("summary", ""),
-                        "status": issue.get("fields", {}).get("status", {}).get("name", ""),
-                    })
+                while True:
+                    jql = f"project = {project_key} ORDER BY created DESC"
 
-                # Si on a récupéré moins que max_results, on a tout
-                if len(issues) < max_results:
-                    break
+                    issues = self.jira.search_issues(
+                        jql,
+                        startAt=start_at,
+                        maxResults=max_results,
+                        fields="summary,status"
+                    )
 
-                start_at += max_results
+                    if not issues:
+                        break
+
+                    for issue in issues:
+                        issues_list.append({
+                            "key": issue.key,
+                            "summary": issue.fields.summary,
+                            "status": str(issue.fields.status),
+                        })
+
+                    if len(issues) < max_results:
+                        break
+
+                    start_at += max_results
 
             logger.info(f"✓ {len(issues_list)} issues récupérées pour {project_key}")
             return issues_list
@@ -301,6 +321,43 @@ class JiraArchiver:
             return []
         except Exception as e:
             logger.error(f"Erreur inattendue lors de la récupération des issues: {e}")
+            return []
+
+    def _parse_archived_issues_csv(self, csv_content: str) -> List[dict]:
+        """
+        Parse le CSV retourné par l'API archive/export.
+
+        Args:
+            csv_content: Contenu CSV brut
+
+        Returns:
+            Liste des issues extraites du CSV
+        """
+        try:
+            issues_list = []
+
+            # Utiliser StringIO pour parser le CSV
+            csv_file = io.StringIO(csv_content)
+            csv_reader = csv.DictReader(csv_file)
+
+            for row in csv_reader:
+                # Extraire les champs clé, summary et status
+                # Les noms de colonnes peuvent varier, donc on essaie différentes variantes
+                issue_key = row.get("Issue key") or row.get("Key") or row.get("key") or ""
+                summary = row.get("Summary") or row.get("summary") or ""
+                status = row.get("Status") or row.get("status") or ""
+
+                if issue_key:  # N'ajouter que si on a au moins la clé
+                    issues_list.append({
+                        "key": issue_key,
+                        "summary": summary,
+                        "status": status,
+                    })
+
+            return issues_list
+
+        except Exception as e:
+            logger.error(f"Erreur lors du parsing du CSV: {e}")
             return []
 
     def get_all_archived_projects(self) -> List[str]:
