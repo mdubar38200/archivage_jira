@@ -229,7 +229,7 @@ class JiraArchiver:
 
     def get_project_issues(self, project_key: str, max_results: int = 1000) -> List[dict]:
         """
-        Récupère toutes les issues d'un projet.
+        Récupère toutes les issues d'un projet, y compris pour les projets archivés.
 
         Args:
             project_key: Clé du projet
@@ -247,18 +247,38 @@ class JiraArchiver:
             while True:
                 # JQL pour récupérer toutes les issues du projet
                 jql = f"project = {project_key} ORDER BY created DESC"
-                issues = self.jira.search_issues(
-                    jql, startAt=start_at, maxResults=max_results
-                )
+
+                # Utiliser l'API REST directement pour supporter les projets archivés
+                # La bibliothèque jira-python ne supporte pas includeArchived par défaut
+                search_url = f"{self.jira_url}/rest/api/3/search"
+                params = {
+                    "jql": jql,
+                    "startAt": start_at,
+                    "maxResults": max_results,
+                    "fields": "summary,status",
+                    "includeArchived": "true"  # Paramètre clé pour les projets archivés
+                }
+
+                response = self.jira._session.get(search_url, params=params)
+
+                if response.status_code != 200:
+                    logger.error(
+                        f"Erreur lors de la récupération des issues de {project_key}: "
+                        f"Status {response.status_code}"
+                    )
+                    break
+
+                data = response.json()
+                issues = data.get("issues", [])
 
                 if not issues:
                     break
 
                 for issue in issues:
                     issues_list.append({
-                        "key": issue.key,
-                        "summary": issue.fields.summary,
-                        "status": str(issue.fields.status),
+                        "key": issue.get("key"),
+                        "summary": issue.get("fields", {}).get("summary", ""),
+                        "status": issue.get("fields", {}).get("status", {}).get("name", ""),
                     })
 
                 # Si on a récupéré moins que max_results, on a tout

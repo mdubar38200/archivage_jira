@@ -201,6 +201,8 @@ python -m src.archivage_jira.main projects.json --export-archived archived_proje
 
 Lors de l'utilisation de `--export-archived`, le fichier JSON généré a la structure suivante:
 
+**Note importante**: L'export récupère automatiquement **toutes les issues** des projets archivés grâce au paramètre `includeArchived=true` de l'API Jira. Les projets archivés et leurs issues sont donc pleinement accessibles.
+
 ```json
 {
   "export_date": "2025-11-07T14:30:00.123456",
@@ -274,6 +276,13 @@ Si la connexion échoue:
 - Vérifiez l'URL de votre instance Jira
 - Vérifiez que le token API est correct
 - Vérifiez votre connexion internet
+
+### Issues des projets archivés
+
+L'outil utilise le paramètre `includeArchived=true` de l'API REST Jira (v3) pour récupérer les issues des projets archivés. Cela signifie que:
+- ✅ Les issues des projets archivés sont automatiquement incluses dans l'export
+- ✅ Aucune configuration spéciale n'est nécessaire
+- ℹ️ L'API REST v3 est utilisée directement pour garantir la compatibilité
 
 ## Développement
 
