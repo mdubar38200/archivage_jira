@@ -19,6 +19,8 @@ def main():
     parser.add_argument(
         "json_file",
         type=Path,
+        nargs='?',
+        default=None,
         help="Chemin vers le fichier JSON contenant les clés de projets"
     )
     parser.add_argument(
@@ -41,6 +43,12 @@ def main():
         action="store_true",
         help="Afficher les informations des projets sans les archiver"
     )
+    parser.add_argument(
+        "--export-archived",
+        type=Path,
+        metavar="OUTPUT_FILE",
+        help="Exporter les projets archivés (et leurs issues) vers un fichier JSON"
+    )
 
     args = parser.parse_args()
 
@@ -61,8 +69,14 @@ def main():
         print("  - JIRA_API_TOKEN (via --api-token ou .env)")
         sys.exit(1)
 
-    # Vérifier que le fichier JSON existe
-    if not args.json_file.exists():
+    # Validation des arguments
+    if not args.export_archived and not args.json_file:
+        print("❌ Erreur: Vous devez fournir un fichier JSON ou utiliser --export-archived")
+        parser.print_help()
+        sys.exit(1)
+
+    # Vérifier que le fichier JSON existe (si fourni)
+    if args.json_file and not args.json_file.exists():
         print(f"❌ Erreur: Le fichier {args.json_file} n'existe pas")
         sys.exit(1)
 
@@ -70,7 +84,30 @@ def main():
         # Initialiser l'archiveur
         archiver = JiraArchiver(jira_url, username, api_token)
 
-        if args.info:
+        if args.export_archived:
+            # Mode export des projets archivés
+            print("\n📦 Export des projets archivés\n")
+
+            # Charger les clés de projets si un fichier est fourni
+            project_keys = None
+            if args.json_file:
+                print(f"Filtrage sur les projets du fichier {args.json_file}")
+                project_keys = archiver.load_project_keys(args.json_file)
+            else:
+                print("Export de tous les projets archivés de l'instance Jira")
+
+            results = archiver.export_archived_projects(args.export_archived, project_keys)
+
+            print("\n" + "=" * 60)
+            print("📊 RÉSULTATS DE L'EXPORT")
+            print("=" * 60)
+            print(f"Total de projets exportés: {results['total_projects']}")
+            print(f"Total d'issues exportées: {results['total_issues']}")
+            print(f"Fichier de sortie: {results['output_file']}")
+            print(f"Horodatage: {results['timestamp']}")
+            print("=" * 60)
+
+        elif args.info:
             # Mode information uniquement
             print(f"\n📋 Récupération des informations des projets depuis {args.json_file}\n")
             project_keys = archiver.load_project_keys(args.json_file)

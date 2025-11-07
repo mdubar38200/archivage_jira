@@ -226,3 +226,169 @@ class JiraArchiver:
         except JIRAError as e:
             logger.error(f"Erreur lors de la récupération du projet {project_key}: {e}")
             return {}
+
+    def get_project_issues(self, project_key: str, max_results: int = 1000) -> List[dict]:
+        """
+        Récupère toutes les issues d'un projet.
+
+        Args:
+            project_key: Clé du projet
+            max_results: Nombre maximum d'issues à récupérer (par batch)
+
+        Returns:
+            Liste des issues avec leurs informations
+        """
+        try:
+            issues_list = []
+            start_at = 0
+
+            logger.info(f"Récupération des issues du projet {project_key}...")
+
+            while True:
+                # JQL pour récupérer toutes les issues du projet
+                jql = f"project = {project_key} ORDER BY created DESC"
+                issues = self.jira.search_issues(
+                    jql, startAt=start_at, maxResults=max_results
+                )
+
+                if not issues:
+                    break
+
+                for issue in issues:
+                    issues_list.append({
+                        "key": issue.key,
+                        "summary": issue.fields.summary,
+                        "status": str(issue.fields.status),
+                    })
+
+                # Si on a récupéré moins que max_results, on a tout
+                if len(issues) < max_results:
+                    break
+
+                start_at += max_results
+
+            logger.info(f"✓ {len(issues_list)} issues récupérées pour {project_key}")
+            return issues_list
+
+        except JIRAError as e:
+            logger.error(f"Erreur lors de la récupération des issues de {project_key}: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Erreur inattendue lors de la récupération des issues: {e}")
+            return []
+
+    def get_all_archived_projects(self) -> List[str]:
+        """
+        Récupère la liste de tous les projets archivés.
+
+        Returns:
+            Liste des clés de projets archivés
+        """
+        try:
+            archived_projects = []
+            all_projects = self.jira.projects()
+
+            logger.info(f"Vérification de l'état d'archivage de {len(all_projects)} projets...")
+
+            for project in all_projects:
+                if self.is_project_archived(project.key):
+                    archived_projects.append(project.key)
+
+            logger.info(f"✓ {len(archived_projects)} projets archivés trouvés")
+            return archived_projects
+
+        except JIRAError as e:
+            logger.error(f"Erreur lors de la récupération des projets: {e}")
+            return []
+        except Exception as e:
+            logger.error(f"Erreur inattendue: {e}")
+            return []
+
+    def export_archived_projects(self, output_file: Path, project_keys: List[str] = None) -> dict:
+        """
+        Exporte les projets archivés et leurs issues dans un fichier JSON.
+
+        Args:
+            output_file: Chemin du fichier JSON de sortie
+            project_keys: Liste optionnelle de clés de projets à exporter.
+                         Si None, exporte tous les projets archivés.
+
+        Returns:
+            Dictionnaire avec les statistiques d'export
+        """
+        try:
+            # Si aucune liste fournie, récupérer tous les projets archivés
+            if project_keys is None:
+                logger.info("Recherche de tous les projets archivés...")
+                project_keys = self.get_all_archived_projects()
+            else:
+                # Filtrer pour ne garder que les projets archivés
+                logger.info(f"Vérification de l'état d'archivage de {len(project_keys)} projets...")
+                archived_keys = []
+                for key in project_keys:
+                    if self.is_project_archived(key):
+                        archived_keys.append(key)
+                    else:
+                        logger.warning(f"⚠ Projet {key} n'est pas archivé, ignoré")
+                project_keys = archived_keys
+
+            if not project_keys:
+                logger.warning("Aucun projet archivé à exporter")
+                return {
+                    "total_projects": 0,
+                    "total_issues": 0,
+                    "timestamp": datetime.now().isoformat()
+                }
+
+            export_data = {
+                "export_date": datetime.now().isoformat(),
+                "total_projects": len(project_keys),
+                "projects": []
+            }
+
+            total_issues = 0
+
+            for project_key in project_keys:
+                logger.info(f"Export du projet {project_key}...")
+                project_info = self.get_project_info(project_key)
+
+                if not project_info:
+                    logger.warning(f"⚠ Impossible de récupérer les infos de {project_key}")
+                    continue
+
+                issues = self.get_project_issues(project_key)
+                total_issues += len(issues)
+
+                project_data = {
+                    "key": project_info.get("key"),
+                    "name": project_info.get("name"),
+                    "description": project_info.get("description", ""),
+                    "lead": project_info.get("lead", ""),
+                    "project_type": project_info.get("project_type", ""),
+                    "total_issues": len(issues),
+                    "issues": issues
+                }
+
+                export_data["projects"].append(project_data)
+
+            export_data["total_issues"] = total_issues
+
+            # Écrire le fichier JSON
+            with open(output_file, 'w', encoding='utf-8') as f:
+                json.dump(export_data, f, indent=2, ensure_ascii=False)
+
+            logger.info(
+                f"✓ Export terminé: {len(project_keys)} projets et "
+                f"{total_issues} issues exportés vers {output_file}"
+            )
+
+            return {
+                "total_projects": len(project_keys),
+                "total_issues": total_issues,
+                "output_file": str(output_file),
+                "timestamp": datetime.now().isoformat()
+            }
+
+        except Exception as e:
+            logger.error(f"Erreur lors de l'export: {e}")
+            raise

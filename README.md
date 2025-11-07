@@ -107,6 +107,20 @@ Ou avec l'installation en mode développement:
 python -m archivage_jira.main projects.json
 ```
 
+### 4. Exporter les projets archivés
+
+Exporter tous les projets archivés avec leurs issues dans un fichier JSON:
+
+```bash
+python -m src.archivage_jira.main --export-archived export.json
+```
+
+Exporter uniquement les projets archivés listés dans un fichier JSON:
+
+```bash
+python -m src.archivage_jira.main projects.json --export-archived export.json
+```
+
 ### Options de ligne de commande
 
 ```bash
@@ -114,11 +128,12 @@ python -m src.archivage_jira.main --help
 ```
 
 Options disponibles:
-- `json_file`: Chemin vers le fichier JSON (obligatoire)
+- `json_file`: Chemin vers le fichier JSON contenant les clés de projets (optionnel avec --export-archived)
 - `--jira-url`: URL de l'instance Jira (optionnel si défini dans .env)
 - `--username`: Nom d'utilisateur Jira (optionnel si défini dans .env)
 - `--api-token`: Token API Jira (optionnel si défini dans .env)
 - `--info`: Afficher uniquement les informations sans archiver
+- `--export-archived OUTPUT_FILE`: Exporter les projets archivés et leurs issues vers un fichier JSON
 
 ## Structure du projet
 
@@ -141,6 +156,7 @@ archivage_jira/
 
 - ✅ Archivage de projets Jira via API REST
 - ✅ Vérification automatique de l'état d'archivage (évite d'archiver les projets déjà archivés)
+- ✅ Export des projets archivés avec toutes leurs issues au format JSON
 - ✅ Chargement des clés de projets depuis fichier JSON
 - ✅ Logs détaillés de chaque opération
 - ✅ Gestion des erreurs et permissions
@@ -170,6 +186,66 @@ python -m src.archivage_jira.main projects.json \
   --username myemail@company.com \
   --api-token mytoken123
 ```
+
+### Exemple 4: Exporter tous les projets archivés
+
+```bash
+# Exporter tous les projets archivés de l'instance
+python -m src.archivage_jira.main --export-archived archived_projects.json
+
+# Exporter uniquement certains projets archivés
+python -m src.archivage_jira.main projects.json --export-archived archived_projects.json
+```
+
+## Format du fichier JSON exporté
+
+Lors de l'utilisation de `--export-archived`, le fichier JSON généré a la structure suivante:
+
+```json
+{
+  "export_date": "2025-11-07T14:30:00.123456",
+  "total_projects": 3,
+  "total_issues": 150,
+  "projects": [
+    {
+      "key": "PROJ1",
+      "name": "Mon Projet 1",
+      "description": "Description du projet",
+      "lead": "john.doe",
+      "project_type": "software",
+      "total_issues": 45,
+      "issues": [
+        {
+          "key": "PROJ1-1",
+          "summary": "Titre de l'issue",
+          "status": "Done"
+        },
+        {
+          "key": "PROJ1-2",
+          "summary": "Autre issue",
+          "status": "In Progress"
+        }
+      ]
+    }
+  ]
+}
+```
+
+Ce fichier contient:
+- **export_date**: Date et heure de l'export
+- **total_projects**: Nombre total de projets exportés
+- **total_issues**: Nombre total d'issues exportées
+- **projects**: Liste des projets avec leurs informations et issues
+  - **key**: Clé du projet
+  - **name**: Nom du projet (summary)
+  - **description**: Description du projet
+  - **lead**: Chef de projet
+  - **project_type**: Type de projet
+  - **total_issues**: Nombre d'issues dans ce projet
+  - **issues**: Liste des issues du projet
+    - **key**: Clé de l'issue
+    - **summary**: Résumé/titre de l'issue
+    - **status**: Statut actuel de l'issue
 
 ## Résolution de problèmes
 
