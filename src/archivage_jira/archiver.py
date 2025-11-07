@@ -259,7 +259,8 @@ class JiraArchiver:
                 jql = f"project = {project_key}"
 
                 # L'API attend un PUT avec le JQL en body
-                payload = {"projects": [project_key], "jql": jql, "exportFormat": "csv"}
+                # Note: Ne pas inclure "projects" car le JQL contient déjà le filtre
+                payload = {"jql": jql, "exportFormat": "csv"}
                 headers = {"Content-Type": "application/json"}
 
                 response = self.jira._session.put(
