@@ -39,6 +39,35 @@ class JiraArchiver:
             logger.error(f"Erreur de connexion à Jira: {e}")
             raise
 
+    def is_project_archived(self, project_key: str) -> bool:
+        """
+        Vérifie si un projet est déjà archivé.
+
+        Args:
+            project_key: Clé du projet à vérifier
+
+        Returns:
+            True si le projet est archivé, False sinon
+        """
+        try:
+            # Utiliser l'API REST pour obtenir les détails complets du projet
+            project_url = f"{self.jira_url}/rest/api/3/project/{project_key}"
+            response = self.jira._session.get(project_url)
+
+            if response.status_code == 200:
+                project_data = response.json()
+                is_archived = project_data.get('archived', False)
+                return is_archived
+            else:
+                logger.warning(
+                    f"Impossible de vérifier l'état d'archivage de {project_key}: "
+                    f"Status {response.status_code}"
+                )
+                return False
+        except Exception as e:
+            logger.error(f"Erreur lors de la vérification de l'état de {project_key}: {e}")
+            return False
+
     def load_project_keys(self, json_file: Path) -> List[str]:
         """
         Charge les clés de projets depuis un fichier JSON.
@@ -71,7 +100,7 @@ class JiraArchiver:
             logger.error(f"Erreur lors du chargement du fichier JSON: {e}")
             raise
 
-    def archive_project(self, project_key: str) -> bool:
+    def archive_project(self, project_key: str) -> dict:
         """
         Archive un projet Jira spécifique.
 
@@ -79,7 +108,8 @@ class JiraArchiver:
             project_key: Clé du projet à archiver
 
         Returns:
-            True si l'archivage a réussi, False sinon
+            Dictionnaire avec le statut:
+            {"status": "success"|"failed"|"already_archived"|"not_found", "message": str}
         """
         try:
             project = self.jira.project(project_key)
@@ -87,7 +117,12 @@ class JiraArchiver:
             # Vérifier si le projet existe
             if not project:
                 logger.warning(f"Projet {project_key} introuvable")
-                return False
+                return {"status": "not_found", "message": "Projet introuvable"}
+
+            # Vérifier si le projet est déjà archivé
+            if self.is_project_archived(project_key):
+                logger.info(f"⊙ Projet {project_key} - {project.name} déjà archivé, ignoré")
+                return {"status": "already_archived", "message": "Projet déjà archivé"}
 
             logger.info(f"Archivage du projet: {project_key} - {project.name}")
 
@@ -100,26 +135,26 @@ class JiraArchiver:
 
                 if response.status_code == 204:
                     logger.info(f"✓ Projet {project_key} archivé avec succès")
-                    return True
+                    return {"status": "success", "message": "Archivage réussi"}
                 elif response.status_code == 403:
                     logger.error(f"✗ Permissions insuffisantes pour archiver {project_key}")
-                    return False
+                    return {"status": "failed", "message": "Permissions insuffisantes"}
                 else:
                     logger.error(
                         f"✗ Erreur lors de l'archivage de {project_key}: "
                         f"Status {response.status_code}"
                     )
-                    return False
+                    return {"status": "failed", "message": f"Erreur HTTP {response.status_code}"}
             except Exception as e:
                 logger.error(f"✗ Erreur lors de l'archivage de {project_key}: {e}")
-                return False
+                return {"status": "failed", "message": str(e)}
 
         except JIRAError as e:
             logger.error(f"✗ Erreur Jira pour le projet {project_key}: {e}")
-            return False
+            return {"status": "failed", "message": f"Erreur Jira: {e}"}
         except Exception as e:
             logger.error(f"✗ Erreur inattendue pour {project_key}: {e}")
-            return False
+            return {"status": "failed", "message": str(e)}
 
     def archive_projects_from_file(self, json_file: Path) -> dict:
         """
@@ -137,19 +172,30 @@ class JiraArchiver:
             "total": len(project_keys),
             "success": 0,
             "failed": 0,
+            "already_archived": 0,
+            "not_found": 0,
             "timestamp": datetime.now().isoformat()
         }
 
         logger.info(f"Démarrage de l'archivage de {results['total']} projets")
 
         for project_key in project_keys:
-            if self.archive_project(project_key):
+            result = self.archive_project(project_key)
+            status = result.get("status", "failed")
+
+            if status == "success":
                 results["success"] += 1
+            elif status == "already_archived":
+                results["already_archived"] += 1
+            elif status == "not_found":
+                results["not_found"] += 1
             else:
                 results["failed"] += 1
 
         logger.info(
             f"Archivage terminé: {results['success']} réussis, "
+            f"{results['already_archived']} déjà archivés, "
+            f"{results['not_found']} introuvables, "
             f"{results['failed']} échoués sur {results['total']} projets"
         )
 
@@ -167,12 +213,15 @@ class JiraArchiver:
         """
         try:
             project = self.jira.project(project_key)
+            is_archived = self.is_project_archived(project_key)
+
             return {
                 "key": project.key,
                 "name": project.name,
                 "description": project.description if hasattr(project, 'description') else "",
                 "lead": str(project.lead) if hasattr(project, 'lead') else "",
                 "project_type": project.projectTypeKey if hasattr(project, 'projectTypeKey') else "",
+                "archived": is_archived,
             }
         except JIRAError as e:
             logger.error(f"Erreur lors de la récupération du projet {project_key}: {e}")

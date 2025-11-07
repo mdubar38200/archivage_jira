@@ -78,25 +78,29 @@ def main():
             for project_key in project_keys:
                 info = archiver.get_project_info(project_key)
                 if info:
+                    archived_status = "Oui ✓" if info.get('archived', False) else "Non"
                     print(f"Projet: {info.get('key', 'N/A')}")
                     print(f"  Nom: {info.get('name', 'N/A')}")
                     print(f"  Description: {info.get('description', 'N/A')}")
                     print(f"  Chef de projet: {info.get('lead', 'N/A')}")
                     print(f"  Type: {info.get('project_type', 'N/A')}")
+                    print(f"  Archivé: {archived_status}")
                     print()
         else:
             # Mode archivage
             print(f"\n🗄️  Démarrage de l'archivage des projets depuis {args.json_file}\n")
             results = archiver.archive_projects_from_file(args.json_file)
 
-            print("\n" + "=" * 50)
+            print("\n" + "=" * 60)
             print("📊 RÉSULTATS DE L'ARCHIVAGE")
-            print("=" * 50)
-            print(f"Total de projets: {results['total']}")
+            print("=" * 60)
+            print(f"Total de projets traités: {results['total']}")
             print(f"✓ Archivés avec succès: {results['success']}")
+            print(f"⊙ Déjà archivés (ignorés): {results['already_archived']}")
+            print(f"? Introuvables: {results['not_found']}")
             print(f"✗ Échecs: {results['failed']}")
             print(f"Horodatage: {results['timestamp']}")
-            print("=" * 50)
+            print("=" * 60)
 
             if results['failed'] > 0:
                 sys.exit(1)

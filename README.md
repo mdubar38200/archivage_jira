@@ -140,10 +140,12 @@ archivage_jira/
 ## Fonctionnalités
 
 - ✅ Archivage de projets Jira via API REST
+- ✅ Vérification automatique de l'état d'archivage (évite d'archiver les projets déjà archivés)
 - ✅ Chargement des clés de projets depuis fichier JSON
 - ✅ Logs détaillés de chaque opération
 - ✅ Gestion des erreurs et permissions
-- ✅ Mode information pour vérifier avant archivage
+- ✅ Mode information pour vérifier avant archivage (affiche l'état archivé)
+- ✅ Statistiques détaillées : réussites, échecs, déjà archivés, introuvables
 - ✅ Support Python 3.13/3.14
 
 ## Exemples
