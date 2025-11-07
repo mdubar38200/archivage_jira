@@ -280,10 +280,12 @@ Si la connexion échoue:
 ### Issues des projets archivés
 
 L'outil utilise l'API officielle Atlassian pour exporter les issues des projets archivés:
-- ✅ **API `/rest/api/3/issues/archive/export`** : Endpoint officiel pour les projets archivés (méthode PUT, retourne CSV)
+- ✅ **API `/rest/api/3/issues/archive/export`** : Endpoint officiel pour les projets archivés (méthode PUT, asynchrone)
+- ✅ **Gestion asynchrone** : L'API retourne un taskId (status 202), l'outil attend automatiquement la fin de l'export
 - ✅ **API search standard** : Pour les projets non archivés
 - ✅ Détection automatique du statut archivé du projet
 - ✅ Parsing automatique du CSV en JSON pour un export uniforme
+- ✅ Timeout configurable (5 minutes par défaut) avec polling toutes les 2 secondes
 - ℹ️ Référence: [Documentation Atlassian](https://developer.atlassian.com/cloud/jira/platform/rest/v3/api-group-issues/#api-rest-api-3-issues-archive-export-put)
 - ℹ️ Compatible avec les dernières versions de l'API Jira Cloud
 

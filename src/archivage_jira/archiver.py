@@ -6,8 +6,9 @@ import json
 import logging
 import csv
 import io
+import time
 from pathlib import Path
-from typing import List
+from typing import List, Optional
 from datetime import datetime
 
 from jira import JIRA
@@ -267,7 +268,32 @@ class JiraArchiver:
                     headers=headers
                 )
 
-                if response.status_code != 200:
+                if response.status_code == 200:
+                    # Export synchrone (rare) - CSV directement disponible
+                    csv_content = response.text
+                    issues_list = self._parse_archived_issues_csv(csv_content)
+
+                elif response.status_code == 202:
+                    # Export asynchrone - récupérer le taskId et attendre
+                    task_data = response.json()
+                    task_id = task_data.get("taskId")
+
+                    if not task_id:
+                        logger.error(f"Aucun taskId retourné pour {project_key}")
+                        return []
+
+                    # Attendre que la tâche soit terminée
+                    csv_content = self._wait_for_export_task(task_id)
+
+                    if csv_content is None:
+                        logger.error(f"Impossible de récupérer le résultat de l'export pour {project_key}")
+                        return []
+
+                    # Parser le CSV
+                    issues_list = self._parse_archived_issues_csv(csv_content)
+
+                else:
+                    # Erreur
                     logger.error(
                         f"Erreur lors de l'export des issues archivées de {project_key}: "
                         f"Status {response.status_code}"
@@ -278,10 +304,6 @@ class JiraArchiver:
                     except:
                         logger.error(f"Réponse: {response.text[:500]}")
                     return []
-
-                # Parser le CSV retourné
-                csv_content = response.text
-                issues_list = self._parse_archived_issues_csv(csv_content)
 
             else:
                 # Pour les projets non archivés, utiliser l'API search standard
@@ -322,6 +344,63 @@ class JiraArchiver:
         except Exception as e:
             logger.error(f"Erreur inattendue lors de la récupération des issues: {e}")
             return []
+
+    def _wait_for_export_task(self, task_id: str, timeout: int = 300, poll_interval: int = 2) -> Optional[str]:
+        """
+        Attend qu'une tâche d'export soit terminée et récupère le résultat.
+
+        Args:
+            task_id: ID de la tâche à surveiller
+            timeout: Timeout maximum en secondes (par défaut 300s = 5min)
+            poll_interval: Intervalle entre les vérifications en secondes
+
+        Returns:
+            Contenu CSV de l'export, ou None en cas d'erreur
+        """
+        task_url = f"{self.jira_url}/rest/api/3/task/{task_id}"
+        start_time = time.time()
+
+        logger.info(f"Attente de la fin de la tâche d'export {task_id}...")
+
+        while True:
+            # Vérifier le timeout
+            if time.time() - start_time > timeout:
+                logger.error(f"Timeout dépassé pour la tâche {task_id}")
+                return None
+
+            # Vérifier le statut de la tâche
+            response = self.jira._session.get(task_url)
+
+            if response.status_code != 200:
+                logger.error(f"Erreur lors de la vérification de la tâche {task_id}: Status {response.status_code}")
+                return None
+
+            task_data = response.json()
+            status = task_data.get("status")
+            progress = task_data.get("progress", 0)
+
+            logger.debug(f"Tâche {task_id}: status={status}, progress={progress}%")
+
+            if status == "COMPLETE":
+                # Tâche terminée, récupérer le résultat
+                result = task_data.get("result")
+                if result:
+                    logger.info(f"✓ Tâche {task_id} terminée avec succès")
+                    return result
+                else:
+                    logger.error(f"Tâche {task_id} terminée mais aucun résultat")
+                    return None
+
+            elif status == "FAILED":
+                logger.error(f"Tâche {task_id} échouée")
+                return None
+
+            elif status == "CANCELLED":
+                logger.error(f"Tâche {task_id} annulée")
+                return None
+
+            # Attendre avant la prochaine vérification
+            time.sleep(poll_interval)
 
     def _parse_archived_issues_csv(self, csv_content: str) -> List[dict]:
         """
